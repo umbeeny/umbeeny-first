@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GCC 회의록 통합 검색</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+
+        const initialMeetings = [
+            {
+                id: '2026-02',
+                month: '2026년 2월',
+                date: '2026년 2월 23일 (월)',
+                location: '1층 대회의실',
+                attendance: '15명 중 14명 참석 (93.3%)',
+                bestAgenda: '전사 공지 방식 개선 요청',
+                agendas: [
+                    { title: '업무보고 미입력 알림 개선 요청', category: '복지/휴가', department: '정보기술팀', content: 'JIRA 업무보고 미입력 시 ERP 관리자 시스템을 통해 미입력 알림 메일이 발송되고 있으나, 오전 또는 오후 반차휴가가 등록되어 있는 경우에는 해당 알림 메일이 발송되지 않음.', feedback: 'ERP 개발 당시 충분한 협의를 통해 마련된 기준이며, 패밀리데이에 오전 반차를 사용하는 등의 예외를 보완하려면 별도 개발이 필요하여 당분간 현행을 유지하고자 합니다.' },
+                    { title: '캘린더 공휴일/대체공휴일 정보 최신화(2026년 동기화) 요청', category: '시설/수리', department: '경영지원실', content: '사내 캘린더에서 제공되는 공휴일/대체공휴일 정보가 2025년 기준으로 표시되어 2026년 일정 동기화가 필요함.', feedback: '현재는 업데이트가 완료되었으니 그룹웨어 캘린더를 확인해주시기 바랍니다.' },
+                    { title: '사내 Wi-Fi 품질 개선 및 Wi-Fi 6~7 업그레이드 검토 요청', category: '노트북/장비', department: '정보기술팀', content: '사내 무선망 Wi-Fi 5 기반으로 지연 및 끊김 발생, Secure GW 경유 업무 시 연결 중단.', feedback: '802.11k/v 추가 설정을 완료하였습니다. Wi-Fi 7 업그레이드는 비용 문제로 어려우나 주말에 전체 공유기 펌웨어 업그레이드를 진행할 예정입니다.' },
+                    { title: '식당 이용 시간 관련 건의', category: '식당/카페테리아', department: '경영지원실', content: '점심 휴식시간 보장을 위해 순차적 이용 방안 검토 요청 (11시 50분 배식인데 40분부터 줄서기 등 시간 낭비).', feedback: '점심시간(12:00~13:00)은 개인 자율 시간에 해당하므로 별도 지정 시간 없이 현행 운영 방식을 유지하고자 합니다.' },
+                    { title: '공용 냉장고 관리 방안 검토 요청', category: '식당/카페테리아', department: '경영지원실', content: '식당 부식(요거트 등)을 냉장고에 넣고 회수하지 않아 정리가 필요함.', feedback: '날짜를 정해 냉장고 정리를 진행할 예정입니다. 이름표 부착은 분실 책임 문제로 진행하지 않습니다.' },
+                    { title: '노트북 관련 안건 (구매비용 및 수령 기준)', category: '노트북/장비', department: '경영지원실', content: '노트북 수령일 기준 신청 제도를 구매요청서 기안일 기준으로 변경 및 가격 상승에 따른 구매비용 증액 요청.', feedback: '자산 관리를 위해 세금계산서 발행일 기준을 유지합니다. 가격 인상은 수급 문제와 함께 전반적으로 재검토하고 있습니다.' },
+                    { title: '전사 공지 방식 개선 요청', category: '기타', department: '경영지원실', content: '현재 공지사항이 이미지 파일로 게시되어 내용 기반 검색(경조사, 경조휴가 등)이 어려움.', feedback: '공지사항에 중요한 키워드를 추가 기재하여 개선할 예정이며, 타 부서 담당자들에게도 함께 공유하겠습니다.' },
+                    { title: '육아기 10시 출근제(1시간 단축) 도입 건의', category: '복지/휴가', department: '경영관리실', content: '2026년 신설된 정부 지원금을 활용해 자녀가 있는 직원 1시간 단축 근무 도입 제안.', feedback: '근태관리 내역 제출 등 현행 근태관리 방식으로는 충족하기에 부족하여 기존 시차출퇴근제 활용을 권장합니다.' },
+                    { title: '칠순·팔순 경조사 휴가 신설 요청', category: '복지/휴가', department: '경영관리실', content: '회갑에만 부여되는 경조 휴가를 칠순·팔순까지 확대 검토 요청.', feedback: '경조휴가는 실제 행사를 위해 부여하는 제도로 취지와 맞지 않아 현행 제도를 유지합니다.' },
+                    { title: '복지포인트 차년도 이월 제도 재도입 건의', category: '복지/휴가', department: '경영관리실', content: '효율적 복지 포인트 사용을 위해 최대 100만 원까지 익년도 이월 및 합산 사용 요청.', feedback: '예산 집행의 불규칙성과 관리상 어려움이 있어 잔여 복지포인트 이월 제도의 재도입은 어렵습니다.' }
+                ]
+            },
+            {
+                id: '2026-03',
+                month: '2026년 3월',
+                date: '2026년 3월 16일 (월)',
+                location: '1층 대회의실',
+                attendance: '15명 중 12명 참석 (80.0%)',
+                bestAgenda: '4월로 이월',
+                agendas: [
+                    { title: 'JIRA 및 Confluence 버그 레포팅 공용 창구 필요 건의', category: 'AI/IT도구', department: '정보기술팀', content: '이슈가 메신저나 개별 문서로 분산되어 중복 보고되거나 누락 발생 및 가시성 부족.', feedback: '개발 업무 개선 TF에서 논의하여 개선을 진행할 예정입니다.' },
+                    { title: '엘레베이터 버튼 정전기 방지 패드 부착 건의', category: '시설/수리', department: '경영지원실', content: '엘리베이터 버튼 누를 때 정전기가 올라와 따끔거려 방지 패드 부착 요청.', feedback: '정전기 방지 패드를 빠른 시일 내에 부착하겠습니다.' },
+                    { title: '화장실에 비치된 치약 제품 확인 요청', category: '시설/수리', department: '경영지원실', content: '화장실 비치 2080치약 사용 금지 성분 논란 여부 확인 및 교체 요청.', feedback: '사용 금지 성분이 포함되어 있지 않아 교체가 필요한 상황은 아니며, 추후 문제 발생 시 교체하겠습니다.' },
+                    { title: '카페테리아 컵라면 판매 요청', category: '식당/카페테리아', department: '경영지원실', content: '식사 양이 부족하거나 못 먹는 경우를 대비해 컵라면 판매 요청.', feedback: '외부 편의점 대비 가격 경쟁력 확보가 어려워 반영해 드리기 어려운 점 양해 부탁드립니다.' }
+                ]
+            },
+            {
+                id: '2026-04',
+                month: '2026년 4월',
+                date: '2026년 4월 20일 (월)',
+                location: '1층 대회의실',
+                attendance: '15명 중 12명 참석 (80%)',
+                bestAgenda: '회의실 환기 개선 요청 및 사내 게시판 식당 메뉴 상세화 요청',
+                agendas: [
+                    { title: '팀용 Repo 만들 수 있도록 Bitbucket에 팀 Project 생성 요청', category: 'AI/IT도구', department: '정보기술팀', content: 'Claude Code 활용 시 팀원 개개인 커스텀 명령어/스킬의 버전 관리 및 공유 문제 해결을 위해 팀 Repo 요청.', feedback: '개인 설정 공유 취지에 공감하며, 전사 차원 공유 방안을 개발 업무 개선 TF에서 논의 중입니다.' },
+                    { title: '전자결재 결재선 동기화 요청', category: 'AI/IT도구', department: '정보기술팀', content: '구매·교육 신청서 등 공지된 결재선과 실제 신청 시 표시되는 결재선이 달라 혼선 발생.', feedback: '금액 기준에 따른 자동 결재선 설정이 시스템상 지원되지 않으므로, 직접 지정해 주시기를 부탁드립니다.' },
+                    { title: '카페테리아 음료 캐리어 개선 요청', category: '식당/카페테리아', department: '경영지원실', content: '음료 캐리어 종이 단면에 손이 베이는 안전사고 발생으로 여유 있는 사이즈나 재질 개선 요청.', feedback: '남아있는 음료 캐리어를 소진한 후에 의견을 반영한 캐리어를 구매하여 사용하겠습니다.' },
+                    { title: '사내 게시판 식당 메뉴 상세화 요청', category: '식당/카페테리아', department: '경영지원실', content: '식단표에 주요 메뉴만 기재되어 세부 반찬 포함 상세 정보 명시 요청.', feedback: '세부 반찬은 당일 수급에 따라 변경될 수 있어 사전에 공유하기 어려우니 당일 현장에서 확인 부탁드립니다.' },
+                    { title: '노트북 감가상각 기준 시점 변경 건의', category: '노트북/장비', department: '경영지원실', content: '감가상각 기준 시점을 취득 순간이 아닌 노트북 구매요청 시점으로 변경 건의.', feedback: '재무적 기준에 따라야 하므로 변경이 어려우며, 개정안 확정 시 공지드리겠습니다.' },
+                    { title: '지상주차장 예약제 시스템 도입 요청', category: '시설/수리', department: '경영지원실', content: '고객사 방문 등 임직원 대상 3~4대 규모 지상주차장 예약제 운영 요청.', feedback: '1층 안내 데스크를 통해 지상 주차 안내를 받으실 수 있으나 공간 협소로 차량 진입을 제한하고 있습니다.' },
+                    { title: '원형 바닥으로 된 테이블 흔들림 조치 요청', category: '시설/수리', department: '경영지원실', content: '24년 8월 안건이나 여전히 테이블이 흔들거려 조치 확인 요청.', feedback: '바닥 불균형으로 발생하므로 사용 전 지면이 고른 곳으로 위치를 조정하여 사용해주시기 바랍니다.' },
+                    { title: '회의실 환기 개선 요청', category: '에어컨/냉난방', department: '경영지원실', content: '회의실 공기 순환이 원활하지 않아 에어서큘레이터나 실링팬 설치 검토 요청.', feedback: '회의실 실링팬 설치를 검토 중이며 설치 적합성 테스트 결과에 따라 확정할 계획입니다.' },
+                    { title: '모니터 상단 형광등 눈부심 관련 건의', category: '시설/수리', department: '경영지원실', content: '모니터 바로 위 형광등 눈부심으로 사비 소형 가림막 설치 가능 여부 문의.', feedback: '타 임직원의 업무 환경에 지장을 주지 않는 선에서 개별 소형 가림막은 설치하셔도 무방합니다.' },
+                    { title: '여자 휴게실 내 대화 자제 요청', category: '헬스장/휴게실', department: '경영지원실', content: '휴게실 이용 시 대화를 자제하고 조용한 휴식 환경 유지 요청.', feedback: '해당 안건의 내용을 GCC 위원들이 각 부서에 전달하기로 하였습니다.' },
+                    { title: '동호회 회비 납부 방식 개선 요청', category: '복지/휴가', department: '경영관리실', content: '활동 어려운 기간 고려해 연 1회 홀딩 월(12~2월) 지정하여 회비 홀딩 요청.', feedback: '급여 공제 입금 지원 방식이라 일부 인원의 요구로 운영 방식을 변경해 드리기는 어렵습니다.' }
+                ]
+            },
+            {
+                id: '2026-05',
+                month: '2026년 5월',
+                date: '2026년 5월 18일 (월)',
+                location: '1층 대회의실',
+                attendance: '15명 중 11명 참석 (73.3%)',
+                bestAgenda: '에어컨 실링팬 설치 요청',
+                agendas: [
+                    { title: '리클라이너 추가 배치 요청', category: '헬스장/휴게실', department: '경영지원실', content: '안마의자 이동 및 탕비실 또는 도서관 옆 여유공간에 리클라이너 추가 설치 요청.', feedback: '공간이 충분하지 않고 왕래가 잦은 곳은 휴게 공간으로 적합하지 않아 추가 설치 계획이 없습니다.' },
+                    { title: '식당 카페 브루드커피 라지 사이즈 메뉴 추가 요청', category: '식당/카페테리아', department: '경영지원실', content: '브루드커피 등 양이 애매하여 라지 사이즈 추가 요청.', feedback: '음료 메뉴의 라지 사이즈 추가 가능 여부를 검토한 후 반영하겠습니다.' },
+                    { title: '구내식당 피드백 설문 운영 건의', category: '식당/카페테리아', department: '경영지원실', content: '메뉴 선호도 및 개선사항 수집을 위한 정기 피드백 설문 운영 건의.', feedback: '그룹웨어 카페테리아 건의사항 게시판을 활용해주시기 바랍니다.' },
+                    { title: '4층 사무공간 및 공용공간 방역 요청', category: '시설/수리', department: '경영지원실', content: '4층 사무공간 및 공용공간에서 바퀴벌레 발견되어 방역 및 점검 요청.', feedback: '해당 공간에 대한 방역 관리를 진행하도록 하겠습니다.' },
+                    { title: '에어컨 청소 건의', category: '에어컨/냉난방', department: '경영지원실', content: '여름철 에어컨 가동 앞서 필터 청소 및 점검 검토 요청.', feedback: '경영지원실에서 주말을 이용하여 1년에 2번 에어컨 청소를 진행하고 있습니다.' },
+                    { title: '에어컨 적정온도 기준 검토 건의', category: '에어컨/냉난방', department: '경영지원실', content: '발열량 높은 사무실 특성 및 4층 Core본부 창가 복사열 고려해 적정온도 하향 조정 요청.', feedback: '에어컨 출력이 저하된 해당 구역 에어컨의 성능 점검을 우선 진행하겠습니다.' },
+                    { title: '에어컨 실링팬 설치 요청 (사무공간 및 회의실)', category: '에어컨/냉난방', department: '경영지원실', content: '냉기 집중 및 온도 편차 해결을 위한 보조용 실링팬 설치 요청.', feedback: '시험 설치를 완료했으며 전등을 가리지 않는 위치에 설치를 진행할 예정입니다.' },
+                    { title: '선풍기 구매 요청', category: '에어컨/냉난방', department: '경영지원실', content: '사무실 내 여유 선풍기가 없어 신규 구매 요청.', feedback: '현재는 선풍기 구매가 가능하오니 필요하신 분은 경영지원실로 신청해주시기 바랍니다.' },
+                    { title: '옥상 흡연실 의자 수리 요청', category: '시설/수리', department: '경영지원실', content: '옥상 흡연실 의자 다리 흔들림 및 안전사고 위험으로 수리/교체 요청.', feedback: '파손된 부분을 확인하여 수리를 진행하겠습니다.' },
+                    { title: '탕비실 얼음 비축 장비 도입 요청', category: '식당/카페테리아', department: '경영지원실', content: '여름철 얼음 사용량 증가로 제빙기 등 얼음 비축 장비 도입 건의.', feedback: '해당 상황 발생 시에는 다른 탕비실의 정수기를 이용해주시기 바랍니다.' },
+                    { title: '임차사택 및 주택자금대출 지원 기간 연장 요청', category: '복지/휴가', department: '경영관리실', content: '고물가 및 주거 안정 위해 임차사택·대출 지원 기간 10년에서 12년으로 연장 요청.', feedback: '재원 한계 및 과도한 장기 묶임 등을 고려할 때 본 안건의 시행은 어렵습니다.' }
+                ]
+            },
+            {
+                id: '2026-06',
+                month: '2026년 6월',
+                date: '2026년 6월 15일 (월)',
+                location: '1층 대회의실',
+                attendance: '15명 중 13명 참석 (86.7%)',
+                bestAgenda: '팀회식대 인상 건의',
+                agendas: [
+                    { title: '사내 메신저 답장 기능 추가 요청', category: 'AI/IT도구', department: '정보기술팀', content: '카카오톡과 유사한 메신저 답장 기능 추가 건의.', feedback: '단일 패키지 형태로 공급되어 단독 커스터마이징이 불가하며, 개발사에 검토를 요청하겠습니다.' },
+                    { title: '에어컨 온도 준수 안내문 부착 요청', category: '에어컨/냉난방', department: '경영지원실', content: '에어컨 26도 유지 공지가 잘 지켜지지 않아 조절기 옆 안내 문구 부착 요청.', feedback: '현재 단일 온도(25도) 고정 중앙제어로 가동 중이며, 개인 체질에 맞게 외투나 선풍기를 활용해주시기 바랍니다.' },
+                    { title: '안마의자 기능 점검 요청', category: '헬스장/휴게실', department: '경영지원실', content: '안마의자 1번 다리 마사지 작동 불량 점검 및 정기 점검 요청.', feedback: '해당 안마의자는 A/S 조치를 완료하였습니다.' },
+                    { title: '용평콘도 예약 현황 조회 페이지 신설 요청', category: '복지/휴가', department: '경영지원실', content: '용평 콘도 예약 가능 여부를 쉽게 조회할 수 있도록 성수기 예약 페이지 활용 요청.', feedback: '기존 성수기 펜션 예약 사이트를 통해 용평콘도 예약도 가능하도록 반영하였습니다.' },
+                    { title: '팀회식대 인상 건의', category: '복지/휴가', department: '경영관리실', content: '물가 상승에 따른 복지 목적 팀회식대 인상 건의.', feedback: '내년도 예산 산정 시 검토할 계획이며 결과는 추후 공유하겠습니다.' },
+                    { title: '티트리 앱 시간 동기화 확인 요청', category: 'AI/IT도구', department: '정보기술팀', content: '티트리 앱 시간이 실제 시간과 차이가 발생하여 동기화 확인 요청.', feedback: '원인 파악 후 조치를 완료하였습니다.' }
+                ]
+            },
+            {
+                id: '2026-07',
+                month: '2026년 7월',
+                date: '2026년 7월 20일 (월)',
+                location: '1층 대회의실',
+                attendance: '15명 중 12명 참석 (80%)',
+                bestAgenda: '사무실 냉방 온도 조정 요청',
+                agendas: [
+                    { title: '각 회의실에 랜선 구성 요청', category: 'AI/IT도구', department: '정보기술팀', content: '무선 네트워크 불안정으로 유선 연결 사용을 위한 각 회의실 랜선 구성 요청.', feedback: '각 회의실 랜선 설치 진행 가능 여부 확인 후 순차적으로 설치를 진행하겠습니다.' },
+                    { title: '1층 출입게이트 안면인식 불안정 문제 조치 요청', category: '시설/수리', department: '경영지원실', content: '아침 햇빛으로 1층 게이트 인식 불량, 각도 조절 또는 햇빛 가리개 추가 요청.', feedback: '기기 상단에 햇빛 가리개를 추가할 예정입니다.' },
+                    { title: '사무실 냉방 온도 조정 요청', category: '에어컨/냉난방', department: '경영지원실', content: '장마철 및 한여름 체감 온도 상승과 전자기기 열기로 냉방 온도 1~2도 낮춰 운영 요청.', feedback: '자체 설문조사 결과를 바탕으로 해당 사무실의 냉방 온도를 조절하겠습니다.' },
+                    { title: '4층 여자화장실 출입문 수리 요청', category: '시설/수리', department: '경영지원실', content: '4층 여자화장실 출입문이 잘 열리지 않아 수리 요청.', feedback: '해당 출입문은 확인 후 수리를 진행할 예정입니다.' },
+                    { title: '기숙사 택배보관함 전등 점검 요청', category: '시설/수리', department: '경영지원실', content: '야간에 어두운 기숙사 택배보관함 모션 인식 센서 점검 요청.', feedback: '센서 점검 및 수리를 진행하도록 하겠습니다.' },
+                    { title: '식당 정수기 냉수 점검 요청', category: '시설/수리', department: '경영지원실', content: '식당 정수기 냉수 미출력 점검 요청.', feedback: '식당 정수기는 A/S를 완료하였습니다.' },
+                    { title: '탕비실 얼음 비축 장비 도입 요청', category: '식당/카페테리아', department: '경영지원실', content: '하절기 탕비실 정수기 얼음 부족으로 얼음 비축 장비 도입 요청.', feedback: '얼음이 부족하신 경우 사내 카페테리아에 문의하시면 제공받으실 수 있도록 조치하겠습니다.' },
+                    { title: '5층 카페테리아 여름 메뉴 건의', category: '식당/카페테리아', department: '경영지원실', content: '카페테리아 여름 메뉴 팥빙수 추가 건의.', feedback: '재고 관리 및 운영 효율성 문제로 인해 팥빙수 메뉴 추가는 어렵습니다.' },
+                    { title: '사내 식당 메뉴 개선 요청', category: '식당/카페테리아', department: '경영지원실', content: '일품 메뉴 위주로 반찬 가짓수가 부족하여 기본 반찬 구성 확대 요청.', feedback: '사내 식당은 일품 메뉴 제공을 기본 방향으로 운영 중이므로 양해 부탁드립니다.' },
+                    { title: '생일 당일 조기 퇴근 제도화 검토 건의', category: '복지/휴가', department: '경영관리실', content: '사기 진작을 위해 생일날 1~2시간 조기 퇴근 제도화 건의.', feedback: '생일 상품권 지급액 인상으로 복지 혜택을 개선하였으므로 조기 퇴근 제도 추가 도입은 어렵습니다.' },
+                    { title: '회사 지원 육아보조금 지급 기준을 국가 아동수당 지급 연령으로 확대 요청', category: '복지/휴가', department: '경영관리실', content: '국가 아동수당 연령 확대(만9세~만13세)에 맞춰 사내 육아보조금 지급 기준(만6세) 확대 요청.', feedback: '미취학 아동 보육 부담 지원 취지 및 예산 수용성을 고려할 때 일률적 확대 적용은 어렵습니다.' }
+                ]
+            },
+            {
+                id: '2026-08',
+                month: '2026년 8월',
+                date: '2026년 8월 24일 (월)',
+                location: '1층 대회의실',
+                attendance: '15명 중 13명 참석 (86.7%)',
+                bestAgenda: '유료 온라인 회의 프로그램 지원 가능여부 문의',
+                agendas: [
+                    { title: '지하 헬스장 각도 조절 벤치 교체 요청', category: '헬스장/휴게실', department: '경영지원실', content: '안장 고정 불량 및 등받이 틈새 흔들림으로 부상 위험 방지 수리/교체 요청.', feedback: '해당 내용은 확인하여 수리를 진행할 예정입니다.' },
+                    { title: '업무용 노트북 견적 확인 기간 문의', category: '노트북/장비', department: '경영지원실', content: '노트북 구매뿐만 아니라 견적 산출도 지연되는 이유 문의.', feedback: '메모리 이슈로 인한 노트북 수급 차질로 견적 산출 소요 기간이 지연되고 있습니다.' },
+                    { title: '업무용 노트북 견적·구매 절차 개선 요청', category: '노트북/장비', department: '경영지원실', content: '품절/단종 또는 가격 초과로 재견적이 반복되어 유사 사양 모델 안내 등 절차 개선 요청.', feedback: '발주 확정 후 수급이 진행되는 방식으로 사전에 확인해 드리기 어려운 점 양해 부탁드립니다.' },
+                    { title: '업무용 노트북 구매 비용 증액 요청', category: '노트북/장비', department: '경영지원실', content: '신형 모델 가격 상승 및 4~5년 교체 주기 고려 기존 비용 대비 10~20% 인상 요청.', feedback: '정책을 다각도로 검토 중이며 구체적인 기준이 확정되는 대로 안내드리겠습니다.' },
+                    { title: '업무용 노트북 구매시 맥미니 선택 옵션 추가 건의', category: '노트북/장비', department: '경영지원실', content: '노트북 교체 시 맥미니 선택 옵션 추가 희망.', feedback: '팀장 이하 직원에 대한 선택 옵션 가능 여부는 아직 검토 중입니다.' },
+                    { title: '유료 온라인 회의 프로그램 지원 가능여부 문의', category: 'AI/IT도구', department: '정보기술팀', content: '줌, 팀즈 등 유료 회의 프로그램 무료 시간(30분~1시간) 제한으로 사내 결제 지원 문의.', feedback: '각 부서의 온라인 회의 필요 여부와 진행 빈도를 파악한 후 검토하겠습니다.' },
+                    { title: '월 1회 시행중인 Family Day를 월 2회로 추가 건의', category: '복지/휴가', department: '경영관리실', content: '주 4.5일제 과도기 및 직원 복지 체감을 위해 패밀리데이 월 2회 확대 건의.', feedback: '1인당 근로시간 감축으로 생산성 부담이 발생하므로 본 안건의 시행은 어렵습니다.' },
+                    { title: '주택자금대출 지원 금액 상향 검토 요청', category: '복지/휴가', department: '경영관리실', content: '부동산 및 주거비용 상승으로 주택자금대출 한도 1억에서 상향 요청.', feedback: '기업 심사 기준에 따른 최대 한도가 1억원이므로 제도적 제한으로 추가 상향은 불가능합니다.' }
+                ]
+            },
+            {
+                id: '2026-09',
+                month: '2026년 9월',
+                date: '2026년 9월 21일 (월)',
+                location: '1층 대회의실',
+                attendance: '15명 중 14명 참석 (93.3%)',
+                bestAgenda: '사내 WiFi 개선 요청',
+                agendas: [
+                    { title: '사내 WiFi 개선 요청', category: '노트북/장비', department: '정보기술팀', content: '5층 WiFi 환경에서 작업 어려울 정도로 잦은 끊김 현상 빠른 조치 요청.', feedback: 'Wi-Fi 7 지원 공유기 교체 설치를 10~11월 통신 공사 일정에 맞춰 진행할 예정입니다.' },
+                    { title: '카페테리아 메뉴 게시판 업데이트 요청', category: '식당/카페테리아', department: '경영지원실', content: '그룹웨어 게시판 카페 메뉴 항목 및 판매가 달라져 업데이트 요청.', feedback: '해당 내용을 확인하여 게시판에 업데이트를 완료하였습니다.' },
+                    { title: '대회의실 마이크 설치 요청', category: '시설/수리', department: '경영지원실', content: '설명회 및 교육 등 인원 집중 시 마이크 및 음향 시설 설치 요청.', feedback: '필요한 시설 수준과 설치 범위를 고려하여 검토해보겠습니다.' },
+                    { title: '4층 여자화장실 출입문 수리 재요청', category: '시설/수리', department: '경영지원실', content: '수리했던 4층 여자화장실 출입문이 바닥에 끌려 재확인 요청.', feedback: '해당 내용은 수리를 완료하였습니다.' },
+                    { title: '각 층 회의실 앞 비치된 손 소독제 사용기한이 만료되어 교체 요청', category: '시설/수리', department: '경영지원실', content: '손 소독제 사용기간 만료로 재비치 문의.', feedback: '현재 이용 현황 고려 시 추가 비치의 필요성이 크지 않아 추후 필요한 상황 발생 시 비치하겠습니다.' },
+                    { title: 'Mac용 V3 라이센스 제공 가능 여부 문의', category: 'AI/IT도구', department: '정보기술팀', content: 'SKT 프로젝트 맥북 사용자 보안 필수 V3 설치로 불필요한 윈도우 설치 강제 해결 요청.', feedback: '필요 인원을 확인한 후 라이선스 제공 가능 여부를 검토하여 공지드리겠습니다.' }
+                ]
+            },
+            {
+                id: '2026-10',
+                month: '2026년 10월',
+                date: '2026년 10월 19일 (월)',
+                location: '1층 대회의실',
+                attendance: '15명 중 11명 참석 (73.3%)',
+                bestAgenda: '5-2. AI 비용 지원 금액 상향 건의',
+                agendas: [
+                    { title: '기숙사 차량 차단봉 권한 완화 건의', category: '시설/수리', department: '경영지원실', content: '기숙사 철거로, 차량 미등록자도 퇴거를 위해 차량 이동이 필요한 상황. 차단봉 이용 자율화 건의.', feedback: '업무시간 외 관리인 부재로 자율화는 어려우나 사전 신청 인원에게는 리모컨을 대여해드릴 예정입니다.' },
+                    { title: '텀블러 세척기 설치 건의', category: '시설/수리', department: '경영지원실', content: '위생 및 편의성 개선을 위한 텀블러 전용 세척기 설치 건의.', feedback: '세면대 도기 재질로 타공형 설치가 불가능하며, 무타공형은 고가 및 관리상 어려움으로 도입이 어렵습니다.' },
+                    { title: '조식 식사 다양화(종류 변경) 건의', category: '식당/카페테리아', department: '경영지원실', content: '단가 차이가 크게 없는 선에서 라면(진라면→신라면/열라면) 및 잼(딸기잼→포도잼/복숭아잼) 종류 변경/추가 제안.', feedback: '원활한 운영 관리를 위해 현재 제공 중인 메뉴의 변경 및 추가는 어려운 점 양해 부탁드립니다.' },
+                    { title: '헬스장 기구(스미스머신) 고장으로 인한 교체 건의', category: '헬스장/휴게실', department: '경영지원실', content: '15년 이상 된 노후 스미스머신 좌우 무게 균형 불균형 등 잔고장 빈발로 교체 건의.', feedback: '확인 결과 이상은 없었으나 이용 시 불편 사항 점검을 위해 의견을 주신 분과 함께 추가 점검하겠습니다.' },
+                    { title: 'AI 구독료 지원 관련 및 비용 지원 금액 상향 건의 (우수안건)', category: 'AI/IT도구', department: '정보기술팀', content: 'Pro($20) 한도 자주 도달하여 차액 본인 부담 또는 Max($110)로 지원 상향 건의.', feedback: '올해는 예산 범위 내 운영하며, 지원 금액·요금제·지원 프로세스에 대해 종합적으로 검토 중입니다.' },
+                    { title: '대회의실 마이크 설치 요청 (지난 안건 Feedback)', category: '시설/수리', department: '경영지원실', content: '설명회 및 교육 등 인원 집중 시 마이크 설치 요청.', feedback: '회의 진행 시 조용한 환경인 점을 고려할 때 설치 필요성이 크지 않아 설치를 진행하지 않습니다.' },
+                    { title: 'Mac용 V3 라이센스 제공 가능 여부 문의 (지난 안건 Feedback)', category: 'AI/IT도구', department: '정보기술팀', content: 'SKT 프로젝트 MacBook 사용자 보안 필수 V3 설치 관련.', feedback: 'Mac용 V3가 필요한 인원을 파악한 후 배포를 완료하였습니다.' }
+                ]
+            }
+        ];
+
+        const categories = ['전체', '노트북/장비', '에어컨/냉난방', '식당/카페테리아', '복지/휴가', '시설/수리', 'AI/IT도구', '헬스장/휴게실'];
+const UNCLASSIFIED = '분류 필요';
+
+const monthKey = (month) => {
+    const m = (month || '').match(/(\d{4})년\s*(\d{1,2})월/);
+    return m ? Number(m[1]) * 100 + Number(m[2]) : 0;
+};
+
+const classifyCategory = (title) => {
+    if (title.includes('에어컨') || title.includes('냉방') || title.includes('환기')) return '에어컨/냉난방';
+    if (title.includes('노트북') || title.includes('PC') || title.includes('Wi-Fi') || title.includes('WiFi')) return '노트북/장비';
+    if (title.includes('식당') || title.includes('카페') || title.includes('음료') || title.includes('조식')) return '식당/카페테리아';
+    if (title.includes('휴가') || title.includes('지원') || title.includes('대출') || title.includes('회식') || title.includes('경조') || title.includes('출산')) return '복지/휴가';
+    if (title.includes('AI') || title.includes('앱') || title.includes('SW') || title.includes('V3')) return 'AI/IT도구';
+    if (title.includes('헬스장') || title.includes('휴게실') || title.includes('안마')) return '헬스장/휴게실';
+    if (title.includes('수리') || title.includes('고장') || title.includes('화장실') || title.includes('엘리베이터') || title.includes('주차') || title.includes('방역')) return '시설/수리';
+    return UNCLASSIFIED;
+};
+
+const downloadJson = (data, filename) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+};
+        function App() {
+            const [extraMeetings, setExtraMeetings] = useState([]);
+
+useEffect(() => {
+    fetch('./meetings.json?t=' + Date.now(), { cache: 'no-store' })
+        .then(res => (res.ok ? res.json() : []))
+        .then(data => { if (Array.isArray(data)) setExtraMeetings(data); })
+        .catch(() => {});
+}, []);
+
+const meetings = useMemo(() => {
+    const merged = [
+        ...initialMeetings.filter(m => !extraMeetings.some(e => e.month === m.month)),
+        ...extraMeetings
+    ];
+    return merged.sort((a, b) => monthKey(a.month) - monthKey(b.month));
+}, [extraMeetings]);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [selectedCategory, setSelectedCategory] = useState('전체');
+            const [selectedMonth, setSelectedMonth] = useState('전체');
+            const [viewMode, setViewMode] = useState('search');
+            const [selectedAgenda, setSelectedAgenda] = useState(null);
+           const [editingMeeting, setEditingMeeting] = useState(null);
+            
+            const [monthlySelectedMonth, setMonthlySelectedMonth] = useState('2026년 10월');
+
+            const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+            const [adminPassword, setAdminPassword] = useState('');
+            const [isLoggedInAdmin, setIsLoggedInAdmin] = useState(false);
+
+            const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+            const [isParsing, setIsParsing] = useState(false);
+            const [pasteText, setPasteText] = useState('');
+            
+            const [parsedMeeting, setParsedMeeting] = useState({
+                month: '2026년 11월',
+                date: '',
+                location: '1층 대회의실',
+                attendance: '',
+                bestAgenda: '',
+                agendas: []
+            });
+
+            const handleGoHome = () => {
+                setViewMode('search');
+                setSelectedCategory('전체');
+                setSelectedMonth('전체');
+                setSearchTerm('');
+            };
+
+            const filteredAgendas = useMemo(() => {
+                let list = [];
+                meetings.forEach(m => {
+                    if (selectedMonth !== '전체' && m.month !== selectedMonth) return;
+                    m.agendas.forEach(a => {
+                        list.push({ ...a, meetingMonth: m.month, meetingDate: m.date });
+                    });
+                });
+
+                return list.filter(item => {
+                    const matchesCategory = selectedCategory === '전체' || item.category === selectedCategory;
+                    const query = searchTerm.toLowerCase();
+                    const matchesSearch = !searchTerm || 
+                        item.title.toLowerCase().includes(query) ||
+                        item.content.toLowerCase().includes(query) ||
+                        item.feedback.toLowerCase().includes(query) ||
+                        item.department.toLowerCase().includes(query) ||
+                        item.meetingMonth.toLowerCase().includes(query);
+                    return matchesCategory && matchesSearch;
+                });
+            }, [meetings, searchTerm, selectedCategory, selectedMonth]);
+
+            const handleAdminLogin = (e) => {
+                e.preventDefault();
+                if (adminPassword === '2026') {
+                    setIsLoggedInAdmin(true);
+                    setIsAdminModalOpen(false);
+                    setAdminPassword('');
+                    setIsAddModalOpen(true);
+                } else {
+                    alert('비밀번호가 올바르지 않습니다.');
+                }
+            };
+
+            
+const parseMeetingText = (text) => {
+    const lines = text
+        .replace(/\r/g, '\n')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\\\n/g, '\n')
+        .split('\n')오후 4:08 2026-10-28오후 4:08 2026-10-28오후 4:08 2026-10-28오후 4:08 2026-10-28오후 4:08 2026-10-28
+        .map(line => line.replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+
+    const cleanText = lines.join('\n');
+
+    const monthMatch = cleanText.match(/202\d년\s*\d+월/);
+    const month = monthMatch ? monthMatch[0] : '2026년 11월';
+
+    const dateMatch =
+        cleanText.match(/(202\d년\s*\d+월\s*\d+일[^\n]*)/);
+    let date = dateMatch ? dateMatch[1].trim() : '';
+    date = date.replace(/\s*\d{1,2}:\d{2}.*$/, '').trim();
+
+    const attMatch =
+        cleanText.match(/([0-9]+명\s*중[^\n]*참석[^\n]*)/);
+    const attendance = attMatch ? attMatch[1].trim() : '';
+
+    const bestMatch =
+        cleanText.match(/우수안건[\s\S]{0,100}?\n([^\n]+)/);
+    const bestAgenda = bestMatch ? bestMatch[1].trim() : '';
+
+    // 상세 안건이 시작되는 구역을 우선 사용
+    const sectionMatch = cleanText.match(
+        /의결안건\s*\(\s*논의안건\s*\)([\s\S]*?)(?=\n지난안건|\nFeedback|$)/i
+    );
+
+    const agendaText = sectionMatch
+        ? sectionMatch[1]
+        : cleanText;
+
+    const agendaBlocks = agendaText.split(
+        /(?=^\s*\d+\s*\.\s*)/m
+    );
+
+    let agendas = [];
+
+    agendaBlocks.forEach(block => {
+        const titleMatch = block.match(/^\s*(\d+)\s*\.\s*([^\n]+)/);
+        if (!titleMatch) return;
+
+        const title = titleMatch[2]
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const lines = block.split('\n').map(line => line.trim());
+
+        // 제목 다음부터 피드백 앞까지를 본문으로 보존
+        const contentLines = [];
+        const feedbackLines = [];
+        let inFeedback = false;
+
+        lines.slice(1).forEach(line => {
+            if (/^☞/.test(line)) {
+                inFeedback = true;
+            }
+
+            if (inFeedback) {
+                feedbackLines.push(line);
+            } else if (line) {
+                contentLines.push(line);
+            }
+        });
+
+        const content = contentLines
+            .join('\n')
+            .replace(/\\x[0-9a-f]+/gi, '')
+            .trim();
+
+        const feedback = feedbackLines
+            .join('\n')
+            .replace(/^☞\s*주무부서\s*(Direct\s*)?피드백:\s*/i, '')
+            .trim();
+
+        const category = classifyCategory(title);
+
+        let department = '경영지원실';
+        if (category === 'AI/IT도구' || category === '노트북/장비') {
+            department = '정보기술팀';
+        }
+        if (category === '복지/휴가') {
+            department = '경영관리실';
+        }
+
+        agendas.push({
+            title,
+            category,
+            department,
+            content,
+            feedback: feedback || '주무부서 피드백을 확인 중입니다.'
+        });
+    });
+
+    // 동일 제목 안건 중복 방지
+    const seenTitles = new Set();
+    agendas = agendas.filter(agenda => {
+        const key = agenda.title
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+
+        if (!key || seenTitles.has(key)) return false;
+        seenTitles.add(key);
+        return true;
+    });
+
+    if (agendas.length === 0) {
+        alert(
+            '상세 안건을 찾지 못했습니다. 워드 문서의 "의결안건(논의안건)" 구역을 확인해주세요.'
+        );
+        return;
+    }
+
+    setParsedMeeting({
+        month,
+        date: date || `${month} 정기회의`,
+        location: '1층 대회의실',
+        attendance: attendance || '참석률 집계 중',
+        bestAgenda: bestAgenda || '검토 중',
+        agendas
+    });
+};
+
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                setIsParsing(true);
+                if (file.name.endsWith('.docx')) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        window.mammoth.extractRawText({ arrayBuffer: event.target.result })
+                            .then((result) => {
+                                parseMeetingText(result.value);
+                                setIsParsing(false);
+                            })
+                            .catch((err) => {
+                                alert('Word 파일 읽기 실패: ' + err.message);
+                                setIsParsing(false);
+                            });
+                    };
+                    reader.readAsArrayBuffer(file);
+                } else {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        parseMeetingText(event.target.result);
+                        setIsParsing(false);
+                    };
+                    reader.readAsText(file);
+                }
+            };
+
+const handleConfirmAddMeeting = () => {
+    if (!parsedMeeting.agendas || parsedMeeting.agendas.length === 0) {
+        alert('추가할 안건이 없습니다.');
+        return;
+    }
+    const key = monthKey(parsedMeeting.month);
+    if (!key) {
+        alert('회의 월을 "2026년 11월" 형식으로 입력해주세요.');
+        return;
+    }
+    const pending = parsedMeeting.agendas.filter(a => a.category === UNCLASSIFIED);
+    if (pending.length > 0) {
+        alert(`분류를 직접 선택해야 하는 안건이 ${pending.length}건 있습니다. 주제 분류를 선택한 뒤 다시 등록해주세요.`);
+        return;
+    }
+
+    const newMeeting = { ...parsedMeeting, id: `meeting-${key}` };
+    const updated = [...extraMeetings.filter(m => m.month !== newMeeting.month), newMeeting];
+
+    setExtraMeetings(updated);
+    downloadJson(updated, 'meetings.json');
+    setIsAddModalOpen(false);
+    setMonthlySelectedMonth(newMeeting.month);
+    alert(`${newMeeting.month} 회의록이 이 화면에 반영되었습니다.\n\n다운로드된 meetings.json 파일을 GitHub 저장소에 업로드해야 다른 직원에게도 보입니다.`);
+};
+
+const openEditMeeting = (m) => setEditingMeeting(JSON.parse(JSON.stringify(m)));
+
+const updateEditAgenda = (idx, field, value) => {
+    const agendas = editingMeeting.agendas.map((a, i) => (i === idx ? { ...a, [field]: value } : a));
+    setEditingMeeting({ ...editingMeeting, agendas });
+};
+
+const handleSaveEdit = () => {
+    if (editingMeeting.agendas.length === 0) {
+        alert('안건이 1건 이상 있어야 합니다. 회의록을 없애려면 [회의록 삭제]를 눌러주세요.');
+        return;
+    }
+    if (editingMeeting.agendas.some(a => !a.category || a.category === UNCLASSIFIED)) {
+        alert('분류가 선택되지 않은 안건이 있습니다.');
+        return;
+    }
+    const saved = { ...editingMeeting, id: `meeting-${monthKey(editingMeeting.month)}` };
+    const updated = [...extraMeetings.filter(m => m.month !== saved.month), saved];
+    setExtraMeetings(updated);
+    downloadJson(updated, 'meetings.json');
+    setEditingMeeting(null);
+    alert('수정되었습니다.\n\n다운로드된 meetings.json을 GitHub에 업로드해야 다른 직원에게도 반영됩니다.');
+};
+
+const handleDeleteMeeting = () => {
+    if (!window.confirm(`${editingMeeting.month} 회의록을 삭제할까요?`)) return;
+    const updated = extraMeetings.filter(m => m.month !== editingMeeting.month);
+    setExtraMeetings(updated);
+    downloadJson(updated, 'meetings.json');
+    setEditingMeeting(null);
+    alert('삭제되었습니다.\n\n다운로드된 meetings.json을 GitHub에 업로드해야 다른 직원에게도 반영됩니다.');
+};
+
+            return (
+                <div className="min-h-screen bg-slate-50 text-slate-900 pb-16">
+                    <header className="bg-indigo-900 text-white shadow-md">
+                        <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div onClick={handleGoHome} className="cursor-pointer group">
+                                <span className="bg-indigo-700 text-indigo-100 text-xs px-2.5 py-1 rounded-full font-medium">GCC 위원회 공식 기록</span>
+                                <h1 className="text-2xl md:text-3xl font-bold mt-1 group-hover:text-indigo-200 transition">
+                                    GCC 회의록 통합 검색 🏠
+                                </h1>
+                                <p className="text-indigo-200 text-sm mt-1">2월부터 10월까지 모든 안건, 주무부서 피드백, 논의사항을 한눈에 검색하세요.</p>
+                            </div>
+                            
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button 
+                                    onClick={() => setViewMode('search')}
+                                    className={`whitespace-nowrap px-4 py-2.5 rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5 ${viewMode === 'search' ? 'bg-white text-indigo-900 shadow-md' : 'bg-indigo-800 text-white hover:bg-indigo-700'}`}>
+                                    <span>🔍</span> 안건별 통합 검색
+                                </button>
+                                <button 
+                                    onClick={() => setViewMode('monthly')}
+                                    className={`whitespace-nowrap px-4 py-2.5 rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5 ${viewMode === 'monthly' ? 'bg-white text-indigo-900 shadow-md' : 'bg-indigo-800 text-white hover:bg-indigo-700'}`}>
+                                    <span>📁</span> 월별 회의록 보기
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        if (isLoggedInAdmin) {
+                                            setIsAddModalOpen(true);
+                                        } else {
+                                            setIsAdminModalOpen(true);
+                                        }
+                                    }}
+                                    className="whitespace-nowrap bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl text-xs md:text-sm font-bold shadow-md transition flex items-center gap-1.5">
+                                    <span>🔒</span> 회의록/안건 추가
+                                </button>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="max-w-6xl mx-auto px-4 mt-8">
+                        {viewMode === 'search' ? (
+                            <div>
+                                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
+                                    <div className="relative mb-4">
+                                        <input 
+                                            type="text" 
+                                            placeholder="검색어를 입력하세요 (예: 차단봉, 텀블러, 노트북, AI, 헬스장, 마이크...)"
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base"
+                                        />
+                                        <span className="absolute left-4 top-3.5 text-xl text-slate-400">🔍</span>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b border-slate-100">
+                                        <span className="text-xs font-bold text-slate-500 mr-2">📅 월별:</span>
+                                        {['전체', ...meetings.map(m => m.month)].map(m => (
+                                            <button
+                                                key={m}
+                                                onClick={() => setSelectedMonth(m)}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${selectedMonth === m ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                                            >
+                                                {m}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-xs font-bold text-slate-500 mr-2">🏷️ 주제별:</span>
+                                        {categories.map(cat => (
+                                            <button
+                                                key={cat}
+                                                onClick={() => setSelectedCategory(cat)}
+                                                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition ${selectedCategory === cat ? 'bg-slate-900 text-white shadow' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                                            >
+                                                #{cat}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-between items-center mb-4">
+                                    <p className="text-sm font-medium text-slate-600">
+                                        검색 결과: <span className="font-bold text-indigo-600">{filteredAgendas.length}</span>건의 안건
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {filteredAgendas.map((item, idx) => (
+                                        <div 
+                                            key={idx} 
+                                            onClick={() => setSelectedAgenda(item)}
+                                            className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition cursor-pointer flex flex-col justify-between group"
+                                        >
+                                            <div>
+                                                <div className="flex justify-between items-start gap-2 mb-2">
+                                                    <span className="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-md font-semibold">
+                                                        {item.meetingMonth}
+                                                    </span>
+                                                    <span className="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md font-medium">
+                                                        #{item.category}
+                                                    </span>
+                                                </div>
+                                                <h3 className="font-bold text-slate-900 text-base group-hover:text-indigo-600 transition mb-2">
+                                                    {item.title}
+                                                </h3>
+                                                <p className="text-xs text-slate-600 line-clamp-2 mb-4">
+                                                    {item.content}
+                                                </p>
+                                            </div>
+                                            <div className="pt-3 border-t border-slate-100 text-xs flex justify-between items-center text-slate-500">
+                                                <span className="font-medium text-slate-700">담당 부서: {item.department}</span>
+                                                <span className="text-indigo-600 font-semibold group-hover:translate-x-1 transition">상세 피드백 보기 →</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {filteredAgendas.length === 0 && (
+                                        <div className="col-span-full py-16 text-center bg-white rounded-2xl border border-slate-200">
+                                            <p className="text-slate-400 text-base">검색 결과가 없습니다. 다른 검색어를 입력해 보세요.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                                    <h3 className="text-sm font-bold text-slate-700 mb-3">📅 조회할 연도 및 월을 선택하세요</h3>
+                                    <div className="flex flex-wrap gap-2">
+                                        {meetings.map((m) => (
+                                            <button
+                                                key={m.id}
+                                                onClick={() => setMonthlySelectedMonth(m.month)}
+                                                className={`px-4 py-2 rounded-xl text-sm font-bold transition ${monthlySelectedMonth === m.month ? 'bg-indigo-600 text-white shadow' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                                            >
+                                                {m.month} 정기회의
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {(() => {
+                                    const m = meetings.find(item => item.month === monthlySelectedMonth);
+                                    if (!m) return null;
+                                    return (
+                                        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                            <div className="bg-slate-900 text-white p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+                                                <div>
+                                                    <h2 className="text-xl font-bold">{m.month} 정기회의록</h2>
+                                                    <p className="text-xs text-slate-300 mt-1">일시: {m.date} | 장소: {m.location} | 참석: {m.attendance}</p>
+                                                </div>
+                                                <div className="flex flex-wrap items-center gap-2">
+    <span className="bg-amber-500 text-slate-950 font-bold text-xs px-3 py-1.5 rounded-full">
+        우수안건 포상: {m.bestAgenda}
+    </span>
+    {isLoggedInAdmin && (
+        <button onClick={() => openEditMeeting(m)} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3 py-1.5 rounded-full">
+            ✏️ 이 회의록 수정
+        </button>
+    )}
+</div>
+                                            </div>
+                                            <div className="p-6 divide-y divide-slate-100">
+                                                {m.agendas.map((a, i) => (
+                                                    <div key={i} className="py-4 first:pt-0 last:pb-0">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-bold">#{a.category}</span>
+                                                            <h4 className="font-semibold text-slate-900 text-base">{i+1}. {a.title} <span className="text-xs text-slate-500 font-normal ml-2">(주무부서: {a.department})</span></h4>
+                                                        </div>
+                                                        <p className="text-xs text-slate-600 mt-1.5 pl-4 border-l-2 border-slate-200">
+                                                            <strong className="text-slate-700">요청/내용:</strong> {a.content}
+                                                        </p>
+                                                        <p className="text-xs text-indigo-800 mt-2 pl-4 border-l-2 border-indigo-400 bg-indigo-50/50 py-1.5 rounded-r">
+                                                            <strong className="text-indigo-900">주무부서 피드백:</strong> {a.feedback}
+                                                        </p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
+                    </main>
+
+                    {isAdminModalOpen && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-slate-200">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-base font-bold text-slate-900">🔒 관리자 인증</h3>
+                                    <button onClick={() => setIsAdminModalOpen(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+                                </div>
+                                <p className="text-xs text-slate-500 mb-4">Word(.docx) 회의록 파일 자동 등록을 위해 관리자 비밀번호를 입력하세요. </p>
+                                <form onSubmit={handleAdminLogin} className="space-y-4">
+                                    <input 
+                                        type="password" 
+                                        placeholder="비밀번호 입력 (1234)" 
+                                        value={adminPassword} 
+                                        onChange={(e) => setAdminPassword(e.target.value)} 
+                                        className="w-full p-3 border border-slate-300 rounded-xl bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                                        autoFocus
+                                        required 
+                                    />
+                                    <div className="flex justify-end gap-2">
+                                        <button type="button" onClick={() => setIsAdminModalOpen(false)} className="px-4 py-2 bg-slate-100 rounded-xl font-semibold text-slate-600 text-xs">취소</button>
+                                        <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-semibold text-xs hover:bg-indigo-500">확인</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {selectedAgenda && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+                            <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div>
+                                        <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-md">{selectedAgenda.meetingMonth}</span>
+                                        <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md ml-2">#{selectedAgenda.category}</span>
+                                    </div>
+                                    <button 
+                                        onClick={() => setSelectedAgenda(null)}
+                                        className="text-slate-400 hover:text-slate-600 text-xl font-bold p-1">
+                                        ✕
+                                    </button>
+                                </div>
+                                <h2 className="text-xl font-bold text-slate-900 mb-4">{selectedAgenda.title}</h2>
+                                
+                                <div className="space-y-4 text-sm">
+                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                        <h4 className="font-bold text-slate-700 mb-1 text-xs uppercase tracking-wider">주무 부서 및 회의일</h4>
+                                        <p className="text-slate-800 font-medium">{selectedAgenda.department} | {selectedAgenda.meetingDate}</p>
+                                    </div>
+
+                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                        <h4 className="font-bold text-slate-700 mb-1 text-xs uppercase tracking-wider">요청 배경 및 안건 내용</h4>
+                                        <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">{selectedAgenda.content}</p>
+                                    </div>
+
+                                    <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                                        <h4 className="font-bold text-indigo-900 mb-1 text-xs uppercase tracking-wider">주무부서 Direct 피드백</h4>
+                                        <p className="text-indigo-950 leading-relaxed whitespace-pre-wrap">{selectedAgenda.feedback}</p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-6 flex justify-end gap-2">
+                                    <button 
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(`[${selectedAgenda.meetingMonth}] ${selectedAgenda.title}\n- 주무부서: ${selectedAgenda.department}\n- 내용: ${selectedAgenda.content}\n- 피드백: ${selectedAgenda.feedback}`);
+                                            alert('안건 내용이 클립보드에 복사되었습니다!');
+                                        }}
+                                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-semibold transition">
+                                        📋 내용 복사하기
+                                    </button>
+                                    <button 
+                                        onClick={() => setSelectedAgenda(null)}
+                                        className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-xl text-sm font-semibold transition">
+                                        닫기
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+{editingMeeting && (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-xl border border-slate-200 max-h-[95vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-bold text-slate-900">✏️ {editingMeeting.month} 회의록 수정</h2>
+                <button onClick={() => setEditingMeeting(null)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs mb-4">
+                {[['date', '일시'], ['location', '장소'], ['attendance', '참석'], ['bestAgenda', '우수 안건']].map(([field, label]) => (
+                    <div key={field}>
+                        <span className="font-bold text-slate-600">{label}:</span>
+                        <input type="text" value={editingMeeting[field] || ''}
+                            onChange={(e) => setEditingMeeting({ ...editingMeeting, [field]: e.target.value })}
+                            className="w-full mt-1 p-2 border border-slate-300 rounded-lg" />
+                    </div>
+                ))}
+            </div>
+
+            <div className="space-y-3">
+                {editingMeeting.agendas.map((ag, idx) => (
+                    <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+                        <div className="flex gap-2">
+                            <input type="text" value={ag.title} onChange={(e) => updateEditAgenda(idx, 'title', e.target.value)}
+                                className="flex-1 font-bold p-1.5 bg-white border border-slate-300 rounded" />
+                            <button type="button"
+                                onClick={() => setEditingMeeting({ ...editingMeeting, agendas: editingMeeting.agendas.filter((_, i) => i !== idx) })}
+                                className="px-2 bg-red-50 text-red-600 rounded font-semibold">안건 삭제</button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <select value={ag.category} onChange={(e) => updateEditAgenda(idx, 'category', e.target.value)} className="p-1 border rounded bg-white">
+                                {[...new Set([...categories.filter(c => c !== '전체'), ag.category])].map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                            <input type="text" value={ag.department} onChange={(e) => updateEditAgenda(idx, 'department', e.target.value)}
+                                className="p-1 border rounded bg-white" placeholder="담당 부서" />
+                        </div>
+                        <textarea rows="3" value={ag.content} placeholder="요청 배경 및 안건 내용"
+                            onChange={(e) => updateEditAgenda(idx, 'content', e.target.value)}
+                            className="w-full p-1.5 border border-slate-300 rounded bg-white" />
+                        <textarea rows="3" value={ag.feedback} placeholder="주무부서 피드백"
+                            onChange={(e) => updateEditAgenda(idx, 'feedback', e.target.value)}
+                            className="w-full p-1.5 border border-indigo-200 rounded bg-indigo-50" />
+                    </div>
+                ))}
+            </div>
+
+            <button type="button"
+                onClick={() => setEditingMeeting({ ...editingMeeting, agendas: [...editingMeeting.agendas, { title: '', category: UNCLASSIFIED, department: '경영지원실', content: '', feedback: '' }] })}
+                className="mt-3 px-3 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold">+ 안건 추가</button>
+
+            <div className="flex justify-between items-center pt-4 mt-4 border-t border-slate-200">
+                {!initialMeetings.some(m => m.month === editingMeeting.month)
+                    ? <button type="button" onClick={handleDeleteMeeting} className="px-4 py-2 bg-red-50 text-red-600 rounded-xl font-semibold text-xs">🗑 회의록 삭제</button>
+                    : <span></span>}
+                <div className="flex gap-2">
+                    <button type="button" onClick={() => setEditingMeeting(null)} className="px-4 py-2 bg-slate-100 rounded-xl font-semibold text-slate-600 text-xs">취소</button>
+                    <button type="button" onClick={handleSaveEdit} className="px-5 py-2 bg-emerald-600 text-white rounded-xl font-semibold text-xs hover:bg-emerald-500">저장</button>
+                </div>
+            </div>
+        </div>
+    </div>
+)}
+
+                    {isAddModalOpen && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl border border-slate-200 max-h-[95vh] overflow-y-auto">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-lg font-bold text-slate-900">📄 Word(.docx) 회의록 자동 업로드 및 등록</h2>
+                                    <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+                                </div>
+
+                                <div className="mb-6 p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+                                    <label className="block text-xs font-bold text-indigo-900 mb-2">
+                                        1. Word 회의록 파일(.docx) 선택 시 자동으로 안건이 추출됩니다:
+                                    </label>
+                                    <input 
+                                        type="file" 
+                                        accept=".docx, .txt" 
+                                        onChange={handleFileUpload} 
+                                        className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"
+                                    />
+                                    {isParsing && <p className="text-xs text-indigo-600 font-bold mt-2">⏳ 회의록 내용을 분석하는 중입니다...</p>}
+                                </div>
+
+                                <div className="mb-4">
+                                    <label className="block text-xs font-bold text-slate-700 mb-1">또는 텍스트 직접 붙여넣기:</label>
+                                    <textarea 
+                                        rows="3" 
+                                        placeholder="회의록 전체 내용을 여기에 붙여넣은 뒤 [내용 분석하기]를 누르세요." 
+                                        value={pasteText} 
+                                        onChange={(e) => setPasteText(e.target.value)} 
+                                        className="w-full p-2.5 border border-slate-300 rounded-xl text-xs bg-slate-50"
+                                    ></textarea>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => parseMeetingText(pasteText)}
+                                        className="mt-1.5 px-3 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-700">
+                                        ⚡ 붙여넣은 내용 분석하기
+                                    </button>
+                                </div>
+
+                                {parsedMeeting.agendas.length > 0 && (
+                                    <div className="space-y-4 pt-4 border-t border-slate-200">
+                                        <h3 className="text-sm font-bold text-slate-900">2. 분석 결과 확인 및 수정</h3>
+                                        <div className="grid grid-cols-2 gap-3 text-xs">
+                                            <div>
+                                                <span className="font-bold text-slate-600">회의 월:</span>
+                                                <input 
+                                                    type="text" 
+                                                    value={parsedMeeting.month} 
+                                                    onChange={(e) => setParsedMeeting({ ...parsedMeeting, month: e.target.value })} 
+                                                    className="w-full mt-1 p-2 border border-slate-300 rounded-lg"
+                                                />
+                                            </div>
+                                            <div>
+                                                <span className="font-bold text-slate-600">우수 안건:</span>
+                                                <input 
+                                                    type="text" 
+                                                    value={parsedMeeting.bestAgenda} 
+                                                    onChange={(e) => setParsedMeeting({ ...parsedMeeting, bestAgenda: e.target.value })} 
+                                                    className="w-full mt-1 p-2 border border-slate-300 rounded-lg"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="max-h-60 overflow-y-auto space-y-3 pr-1">
+                                            <span className="text-xs font-bold text-slate-700">추출된 안건 ({parsedMeeting.agendas.length}건):</span>
+                                            {parsedMeeting.agendas.map((ag, idx) => (
+                                                <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+                                                    <input 
+                                                        type="text" 
+                                                        value={ag.title} 
+                                                        onChange={(e) => {
+                                                            const updated = [...parsedMeeting.agendas];
+                                                            updated[idx].title = e.target.value;
+                                                            setParsedMeeting({ ...parsedMeeting, agendas: updated });
+                                                        }}
+                                                        className="w-full font-bold p-1.5 bg-white border border-slate-300 rounded"
+                                                    />
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <select 
+                                                            value={ag.category} 
+                                                            onChange={(e) => {
+                                                                const updated = [...parsedMeeting.agendas];
+                                                                updated[idx].category = e.target.value;
+                                                                setParsedMeeting({ ...parsedMeeting, agendas: updated });
+                                                            }}
+                                                            className="p-1 border rounded bg-white"
+                                                        >
+                                                            {ag.category === UNCLASSIFIED && <option value={UNCLASSIFIED}>⚠ 분류 필요 (직접 선택)</option>}
+{categories.filter(c => c !== '전체').map(c => <option key={c} value={c}>{c}</option>)}
+                                                        </select>
+                                                        <input 
+                                                            type="text" 
+                                                            value={ag.department} 
+                                                            onChange={(e) => {
+                                                                const updated = [...parsedMeeting.agendas];
+                                                                updated[idx].department = e.target.value;
+                                                                setParsedMeeting({ ...parsedMeeting, agendas: updated });
+                                                            }}
+                                                            className="p-1 border rounded bg-white"
+                                                            placeholder="담당 부서"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <div className="flex justify-end gap-2 pt-2">
+                                            <button type="button" onClick={() => setIsAddModalOpen(false)} className="px-4 py-2 bg-slate-100 rounded-xl font-semibold text-slate-600 text-xs">취소</button>
+                                            <button type="button" onClick={handleConfirmAddMeeting} className="px-5 py-2 bg-emerald-600 text-white rounded-xl font-semibold text-xs hover:bg-emerald-500">최종 회의록에 등록하기</button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
